@@ -1,0 +1,29 @@
+{
+  "name": "vending-bench",
+  "version": "0.1.0",
+  "description": "Vending-Bench-2 recreation for testing openclaw agent capabilities",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts run",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "run:test": "tsx src/index.ts test",
+    "run:short": "tsx src/index.ts run --days 30",
+    "run:full": "tsx src/index.ts run --days 365",
+    "run:openclaw": "tsx src/index.ts run --mode openclaw",
+    "run:openclaw:test": "tsx src/index.ts test --mode openclaw",
+    "chart": "tsx src/chart.ts",
+    "chart:latest": "tsx src/chart.ts --latest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

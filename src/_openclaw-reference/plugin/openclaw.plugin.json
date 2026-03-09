@@ -1,0 +1,8 @@
+{
+  "id": "vending-bench",
+  "name": "Vending Bench Tools",
+  "description": "14 vending machine simulation tools for the Vending Bench eval",
+  "version": "0.1.0",
+  "kind": "tools",
+  "configSchema": {}
+}
