@@ -1,7 +1,7 @@
 {
-  "name": "vending-bench",
+  "name": "vending-bench-clone",
   "version": "0.1.0",
-  "description": "Vending-Bench-2 recreation for testing openclaw agent capabilities",
+  "description": "Independent rebuild of a vending machine business benchmark for LLM agent research",
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts run",

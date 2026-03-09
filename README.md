@@ -1,4 +1,6 @@
-# Vending-Bench
+# Vending-Bench Clone
+
+> **Disclaimer:** This project is not affiliated with, endorsed by, or connected to [Andon Labs](https://andonlabs.com) or the original Vending Bench benchmark. It is an independent rebuild created from publicly available information about the benchmark concept for research purposes.
 
 A benchmark eval that simulates running a vending machine business over 365 days. An LLM agent must find suppliers, order products, stock the machine, set prices, and manage finances to maximize net worth.
 
