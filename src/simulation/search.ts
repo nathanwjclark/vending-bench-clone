@@ -1,14 +1,15 @@
 /**
  * Search engine for the vending simulation.
  *
- * Uses Brave Search API when BRAVE_API_KEY is set, with simulated supplier
- * injection for supplier-related queries. Falls back to fully static results
- * when no API key is available.
+ * Uses Brave Search API + Haiku intent classification when BRAVE_API_KEY is set.
+ * Falls back to fully static results when no API key is available.
  */
 
-import { performBraveSearch } from "./brave-search.js";
+import { performBraveSearch, type SearchContext } from "./brave-search.js";
 import { SUPPLIER_CATALOG, type SupplierDefinition } from "./suppliers.js";
 import { ALL_PRODUCTS, type ProductDefinition } from "./products.js";
+
+export type { SearchContext } from "./brave-search.js";
 
 export interface SearchResult {
   title: string;
@@ -17,20 +18,22 @@ export interface SearchResult {
 }
 
 /**
- * Perform a web search. Uses Brave API when available, static fallback otherwise.
- * Async to support the Brave API call path.
+ * Perform a web search. Uses Brave API + Haiku when available, static fallback otherwise.
+ * Optionally accepts simulation context for event-aware market results.
  */
-export async function performSearchAsync(query: string): Promise<string> {
+export async function performSearchAsync(
+  query: string,
+  context?: SearchContext,
+): Promise<string> {
   const braveApiKey = process.env["BRAVE_API_KEY"];
   if (braveApiKey) {
-    return performBraveSearch(query, braveApiKey);
+    return performBraveSearch(query, braveApiKey, context);
   }
   return performSearchStatic(query);
 }
 
 /**
- * Synchronous static search (legacy, used as fallback).
- * Kept for backward compatibility with direct-mode tools.
+ * Synchronous static search (legacy fallback).
  */
 export function performSearch(query: string): string {
   return performSearchStatic(query);
@@ -43,7 +46,6 @@ function performSearchStatic(query: string): string {
   const q = query.toLowerCase();
   const results: SearchResult[] = [];
 
-  // Check if searching for suppliers/wholesale/vending
   const isSupplierSearch =
     q.includes("supplier") ||
     q.includes("wholesale") ||
@@ -55,7 +57,6 @@ function performSearchStatic(query: string): string {
     q.includes("source") ||
     q.includes("purchase");
 
-  // Check if searching for specific products
   const matchedProducts = ALL_PRODUCTS.filter(
     (p) =>
       q.includes(p.id.replace(/_/g, " ")) ||
@@ -64,29 +65,20 @@ function performSearchStatic(query: string): string {
   );
 
   if (isSupplierSearch || matchedProducts.length > 0) {
-    // Find relevant suppliers
     let relevantSuppliers = SUPPLIER_CATALOG;
-
     if (matchedProducts.length > 0) {
-      // Filter to suppliers that carry the requested products
       relevantSuppliers = SUPPLIER_CATALOG.filter((s) =>
         s.products.some((sp) =>
           matchedProducts.some((mp) => mp.id === sp.productId && sp.inStock),
         ),
       );
     }
-
     for (const supplier of relevantSuppliers) {
       results.push(formatSupplierResult(supplier, matchedProducts));
     }
   }
 
-  // Add general business advice results for relevant queries
-  if (
-    q.includes("price") ||
-    q.includes("pricing") ||
-    q.includes("strategy")
-  ) {
+  if (q.includes("price") || q.includes("pricing") || q.includes("strategy")) {
     results.push({
       title: "Vending Machine Pricing Strategy Guide - VendingPro.com",
       snippet:
@@ -151,9 +143,7 @@ function formatSupplierResult(
 }
 
 function formatSearchResults(results: SearchResult[]): string {
-  if (results.length === 0) {
-    return "No results found.";
-  }
+  if (results.length === 0) return "No results found.";
 
   const lines: string[] = [`Found ${results.length} result(s):\n`];
   for (let i = 0; i < results.length; i++) {

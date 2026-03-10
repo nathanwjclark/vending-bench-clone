@@ -1,17 +1,21 @@
 /**
- * Brave Search API integration with simulated supplier injection.
+ * Brave Search API integration with LLM-powered intent classification.
  *
- * When the agent searches for vending suppliers, wholesalers, or related terms,
- * real Brave search results are fetched but supplier-related results are replaced
- * with our simulated supplier catalog. Non-supplier queries pass through to Brave
- * and return real results.
+ * Uses Haiku to classify search queries into categories:
+ * - "supplier": inject simulated supplier catalog + filtered real results
+ * - "market": inject simulated news matching active events + real results
+ * - "general": pass through to Brave for real results only
  *
- * This mirrors Andon Labs' approach: real web search for general queries,
- * but intercepted supplier discovery so the agent interacts with our simulation.
+ * This mirrors Andon Labs' approach: real web search augmented with
+ * simulation-aware intercepted results.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
 import { SUPPLIER_CATALOG, type SupplierDefinition } from "./suppliers.js";
 import { ALL_PRODUCTS, type ProductDefinition } from "./products.js";
+import { EVENT_CATALOG } from "./events.js";
+import type { ActiveEvent } from "./events.js";
+import { generateWeather, type Weather } from "./demand.js";
 
 export interface SearchResult {
   title: string;
@@ -19,57 +23,90 @@ export interface SearchResult {
   url: string;
 }
 
-/** Keywords that indicate a supplier/wholesale search */
-const SUPPLIER_KEYWORDS = [
-  "supplier",
-  "wholesale",
-  "distributor",
-  "vending",
-  "vendor",
-  "source",
-  "bulk",
-  "inventory",
-  "restock",
-  "snack supplier",
-  "drink supplier",
-  "beverage wholesale",
-];
+/** Simulation context for event-aware search results. */
+export interface SearchContext {
+  currentDay: number;
+  activeEvents: ActiveEvent[];
+  weather: Weather;
+}
 
-/** Keywords that indicate an order/purchase (not a discovery search) */
-const ORDER_KEYWORDS = ["order", "purchase", "buy", "place an order"];
+type SearchIntent = "supplier" | "market" | "general";
 
 /**
- * Perform a web search using Brave API, with supplier result injection.
- *
- * - Supplier-related queries: returns simulated supplier listings + a few real results for context
- * - Product-related queries: returns simulated suppliers carrying that product + real results
- * - General queries (pricing strategy, business advice, etc.): returns real Brave results only
+ * Classify search intent using Haiku.
+ * Returns "supplier", "market", or "general".
+ */
+async function classifySearchIntent(
+  query: string,
+  apiKey: string,
+): Promise<SearchIntent> {
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 20,
+      system: `You classify search queries into exactly one category. Respond with ONLY one word.
+
+Categories:
+- "supplier": looking for wholesale suppliers, distributors, vendors, product sourcing, bulk purchasing, restocking inventory
+- "market": looking for weather forecasts, market conditions, local news, foot traffic, tourism, food safety, FDA recalls, economic conditions, neighborhood events
+- "general": pricing strategy, business tips, how-to guides, general information, anything else
+
+Respond with exactly one word: supplier, market, or general`,
+      messages: [{ role: "user", content: query }],
+    });
+
+    const text = response.content[0]?.type === "text"
+      ? response.content[0].text.trim().toLowerCase()
+      : "general";
+
+    if (text === "supplier" || text === "market" || text === "general") {
+      return text;
+    }
+    // Handle partial matches
+    if (text.includes("supplier")) return "supplier";
+    if (text.includes("market")) return "market";
+    return "general";
+  } catch {
+    // Fallback to simple keyword heuristic if Haiku fails
+    return classifyByKeywords(query);
+  }
+}
+
+/** Simple keyword fallback when LLM is unavailable. */
+function classifyByKeywords(query: string): SearchIntent {
+  const q = query.toLowerCase();
+  const supplierWords = ["supplier", "wholesale", "distributor", "vendor", "bulk order", "restock"];
+  const marketWords = ["weather", "forecast", "news", "traffic", "tourism", "recall", "fda", "market conditions"];
+
+  if (supplierWords.some((w) => q.includes(w))) return "supplier";
+  if (marketWords.some((w) => q.includes(w))) return "market";
+  return "general";
+}
+
+/**
+ * Perform a web search using Brave API, with LLM-classified intent handling.
  */
 export async function performBraveSearch(
   query: string,
   braveApiKey: string,
+  context?: SearchContext,
 ): Promise<string> {
-  const q = query.toLowerCase();
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-  const isSupplierSearch = SUPPLIER_KEYWORDS.some((kw) => q.includes(kw));
-  const isOrderSearch = ORDER_KEYWORDS.some((kw) => q.includes(kw));
-
-  // Match products mentioned in the query
-  const matchedProducts = ALL_PRODUCTS.filter(
-    (p) =>
-      q.includes(p.id.replace(/_/g, " ")) ||
-      q.includes(p.name.toLowerCase()) ||
-      q.includes(p.category),
-  );
+  // Classify intent
+  const intent = anthropicKey
+    ? await classifySearchIntent(query, anthropicKey)
+    : classifyByKeywords(query);
 
   const results: SearchResult[] = [];
 
-  // For supplier/product searches, inject simulated supplier results first
-  if (isSupplierSearch || isOrderSearch || matchedProducts.length > 0) {
+  // Handle supplier intent
+  if (intent === "supplier") {
+    const matchedProducts = matchProducts(query);
     let relevantSuppliers = SUPPLIER_CATALOG;
 
     if (matchedProducts.length > 0) {
-      // Filter to suppliers that carry the requested products
       relevantSuppliers = SUPPLIER_CATALOG.filter((s) =>
         s.products.some((sp) =>
           matchedProducts.some((mp) => mp.id === sp.productId && sp.inStock),
@@ -77,31 +114,34 @@ export async function performBraveSearch(
       );
     }
 
-    // Add simulated supplier results
     for (const supplier of relevantSuppliers) {
       results.push(formatSupplierResult(supplier, matchedProducts));
     }
   }
 
-  // Fetch real results from Brave for context
+  // Handle market intent — inject event-aware contextual results
+  if (intent === "market" && context) {
+    const marketResults = generateMarketResults(query, context);
+    results.push(...marketResults);
+  }
+
+  // Fetch real results from Brave for all intents
   try {
     const braveResults = await fetchBraveResults(query, braveApiKey);
-    // Filter out results that could conflict with our simulated suppliers
-    // (e.g., real wholesale supplier listings that would confuse the agent)
-    const filtered = isSupplierSearch
-      ? braveResults.filter((r) => !looksLikeRealSupplier(r))
-      : braveResults;
 
-    // Append up to 3-5 real results for context
-    const maxReal = isSupplierSearch ? 3 : 5;
-    results.push(...filtered.slice(0, maxReal));
-  } catch (err) {
-    // If Brave API fails, still return simulated results (graceful degradation)
+    if (intent === "supplier") {
+      // Filter out real wholesale listings to avoid confusion
+      const filtered = braveResults.filter((r) => !looksLikeRealSupplier(r));
+      results.push(...filtered.slice(0, 3));
+    } else {
+      results.push(...braveResults.slice(0, 5));
+    }
+  } catch {
+    // Brave API failure — graceful degradation with what we have
     if (results.length === 0) {
       results.push({
         title: `Search results for: ${query}`,
-        snippet:
-          "Search service temporarily unavailable. Try searching for 'wholesale vending suppliers San Francisco' or specific product names.",
+        snippet: "Search service temporarily unavailable. Try again later.",
         url: "https://search.example.com",
       });
     }
@@ -110,8 +150,7 @@ export async function performBraveSearch(
   if (results.length === 0) {
     results.push({
       title: `Search results for: ${query}`,
-      snippet:
-        "No specific results found. Try searching for 'wholesale vending suppliers San Francisco' or specific product names like 'wholesale water bottles' to find suppliers.",
+      snippet: "No specific results found. Try a different search query.",
       url: "https://search.example.com",
     });
   }
@@ -120,8 +159,106 @@ export async function performBraveSearch(
 }
 
 /**
- * Fetch results from Brave Search API.
+ * Generate market/news results based on active simulation events.
  */
+function generateMarketResults(query: string, ctx: SearchContext): SearchResult[] {
+  const results: SearchResult[] = [];
+  const q = query.toLowerCase();
+  const month = Math.floor(((ctx.currentDay - 1) % 365) / 30.44) + 1;
+  const monthName = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ][month - 1]!;
+
+  // Weather-related queries
+  if (q.includes("weather") || q.includes("forecast")) {
+    const weatherDesc: Record<Weather, string> = {
+      sunny: "Clear skies and sunshine expected. Great day for outdoor foot traffic near vending locations.",
+      cloudy: "Overcast skies expected. Moderate foot traffic anticipated.",
+      rainy: "Rain expected throughout the day. Foot traffic may be reduced. Indoor vending locations less affected.",
+      hot: "High temperatures expected. Increased demand for cold beverages and refreshments.",
+    };
+
+    results.push({
+      title: `San Francisco Weather — ${monthName} Forecast`,
+      snippet: weatherDesc[ctx.weather] + ` Current conditions: ${ctx.weather}.`,
+      url: "https://weather.com/sf-forecast",
+    });
+  }
+
+  // Event-aware results
+  for (const ae of ctx.activeEvents) {
+    const def = EVENT_CATALOG.find((e) => e.id === ae.eventDefId);
+    if (!def) continue;
+
+    if (def.id === "tourist_rush" && (q.includes("tourism") || q.includes("traffic") || q.includes("crowd") || q.includes("event") || q.includes("news"))) {
+      results.push({
+        title: "Tourism Surge Hits Bay Street Area — SF Chronicle",
+        snippet: `A large influx of tourists has been reported around the Bay St / Marina District area. Local businesses are seeing significantly higher foot traffic. The surge is expected to last ${ae.endDay - ctx.currentDay + 1} more day(s).`,
+        url: "https://sfchronicle.com/tourism-surge",
+      });
+    }
+
+    if (def.id === "fda_product_recall" && (q.includes("recall") || q.includes("fda") || q.includes("food safety") || q.includes("news") || q.includes("health"))) {
+      results.push({
+        title: "FDA Issues Recall on Snack Products — Food Safety Alert",
+        snippet: `The FDA has issued a mandatory recall affecting certain snack products due to contamination concerns. Affected items have been pulled from supplier catalogs. The recall is expected to remain in effect for approximately ${ae.endDay - ctx.currentDay + 1} more day(s).`,
+        url: "https://fda.gov/safety/recalls",
+      });
+    }
+
+    if (def.id === "supplier_out_of_business" && (q.includes("supplier") || q.includes("closure") || q.includes("business") || q.includes("news"))) {
+      const supplierId = ae.resolvedParams["supplierId"];
+      const supplier = typeof supplierId === "string"
+        ? SUPPLIER_CATALOG.find((s) => s.id === supplierId)
+        : null;
+      const name = supplier?.name ?? "A local vending supplier";
+      results.push({
+        title: `${name} Closes Operations — Bay Area Business Journal`,
+        snippet: `${name} has permanently shut down operations. Customers are advised to find alternative suppliers. The closure was announced on Day ${ae.startDay}.`,
+        url: "https://bizjournals.com/sf/supplier-closure",
+      });
+    }
+
+    if (def.id === "machine_breakdown" && (q.includes("repair") || q.includes("maintenance") || q.includes("breakdown") || q.includes("technician"))) {
+      results.push({
+        title: "Vending Machine Repair Services — SF Area",
+        snippet: `Need emergency vending machine repair? Local technicians available for next-day service. Average repair cost: $75-$175. Your machine is expected to be back online by Day ${ae.endDay + 1}.`,
+        url: "https://sfvendingrepair.com",
+      });
+    }
+  }
+
+  // General market context even without active events
+  if (q.includes("market") || q.includes("demand") || q.includes("trend")) {
+    const seasonalNote = month >= 5 && month <= 8
+      ? "Summer months typically see 15-30% higher vending sales due to heat and tourism."
+      : month >= 11 || month <= 1
+        ? "Winter months see slightly reduced vending traffic, but holiday events can create local demand spikes."
+        : "Spring/fall sees moderate, steady vending demand.";
+
+    results.push({
+      title: `SF Vending Market Trends — ${monthName} Update`,
+      snippet: `${seasonalNote} The Bay St / Marina District location sees strong weekday commuter traffic and weekend tourist footfall.`,
+      url: "https://vendingtimes.com/sf-trends",
+    });
+  }
+
+  return results;
+}
+
+/** Match products mentioned in a search query. */
+function matchProducts(query: string): ProductDefinition[] {
+  const q = query.toLowerCase();
+  return ALL_PRODUCTS.filter(
+    (p) =>
+      q.includes(p.id.replace(/_/g, " ")) ||
+      q.includes(p.name.toLowerCase()) ||
+      q.includes(p.category),
+  );
+}
+
+/** Fetch results from Brave Search API. */
 async function fetchBraveResults(
   query: string,
   apiKey: string,
@@ -160,26 +297,15 @@ async function fetchBraveResults(
   }));
 }
 
-/**
- * Check if a search result looks like a real wholesale supplier listing
- * that could conflict with our simulated suppliers.
- */
+/** Check if a result looks like a real supplier listing. */
 function looksLikeRealSupplier(result: SearchResult): boolean {
   const text = `${result.title} ${result.snippet}`.toLowerCase();
-  const supplierSignals = [
-    "wholesale distributor",
-    "bulk supplier",
-    "wholesale vending",
-    "vending supplier",
-    "wholesale snack",
-    "wholesale beverage",
-    "wholesale price",
-    "order online",
-    "bulk pricing",
+  const signals = [
+    "wholesale distributor", "bulk supplier", "wholesale vending",
+    "vending supplier", "wholesale snack", "wholesale beverage",
+    "wholesale price", "order online", "bulk pricing",
   ];
-  // If 2+ signals match, it's probably a real supplier listing
-  const matches = supplierSignals.filter((s) => text.includes(s));
-  return matches.length >= 2;
+  return signals.filter((s) => text.includes(s)).length >= 2;
 }
 
 function formatSupplierResult(
@@ -208,9 +334,7 @@ function formatSupplierResult(
 }
 
 function formatSearchResults(results: SearchResult[]): string {
-  if (results.length === 0) {
-    return "No results found.";
-  }
+  if (results.length === 0) return "No results found.";
 
   const lines: string[] = [`Found ${results.length} result(s):\n`];
   for (let i = 0; i < results.length; i++) {

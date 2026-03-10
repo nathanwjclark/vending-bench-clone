@@ -209,9 +209,16 @@ export function createVendingTools() {
         const query = params.query;
         if (!query) return ok("Error: 'query' is required.");
 
-        // Use Brave-powered search when API key is available, static fallback otherwise
+        // Build SearchContext from state file for event-aware results
         const { performSearchAsync } = await import("../simulation/search.js");
-        const results = await performSearchAsync(query);
+        const { generateWeather } = await import("../simulation/demand.js");
+        const state = readState();
+        const context = {
+          currentDay: state.time.day,
+          activeEvents: state.activeEvents ?? [],
+          weather: generateWeather(state.time.day),
+        };
+        const results = await performSearchAsync(query, context);
         return ok(results);
       },
     },

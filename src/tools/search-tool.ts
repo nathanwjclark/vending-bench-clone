@@ -3,6 +3,7 @@
  */
 
 import { performSearchAsync } from "../simulation/search.js";
+import { generateWeather } from "../simulation/demand.js";
 import type { ToolDefinition } from "./types.js";
 
 export const searchEngine: ToolDefinition = {
@@ -16,13 +17,18 @@ export const searchEngine: ToolDefinition = {
     },
   },
   timeCost: "digital",
-  async execute(params, _world) {
+  async execute(params, world) {
     const query = String(params["query"] ?? "");
     if (!query) {
       return { output: "Error: 'query' is required." };
     }
 
-    const results = await performSearchAsync(query);
+    const context = {
+      currentDay: world.time.day,
+      activeEvents: world.activeEvents,
+      weather: generateWeather(world.time.day),
+    };
+    const results = await performSearchAsync(query, context);
     return { output: results };
   },
 };
