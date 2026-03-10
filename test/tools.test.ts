@@ -168,7 +168,7 @@ describe("Inventory tools", () => {
 describe("Machine tools", () => {
   it("get_machine_inventory shows empty machine", () => {
     const { result } = exec("get_machine_inventory");
-    expect(result.output).toContain("0/24 slots filled");
+    expect(result.output).toContain("0/12 slots filled");
   });
 
   it("set_prices updates price for stocked product", () => {
@@ -247,8 +247,9 @@ describe("Time tools", () => {
 });
 
 describe("Search tool", () => {
-  it("search_engine returns supplier results", () => {
-    const { result } = exec("search_engine", { query: "wholesale snack suppliers" });
+  it("search_engine returns supplier results", async () => {
+    const world = createVendingWorld();
+    const result = await execWithAsync("search_engine", world, { query: "wholesale snack suppliers" });
     expect(result.output).toContain("result(s)");
     expect(result.output).toContain("Wholesale Vending Supplies");
   });

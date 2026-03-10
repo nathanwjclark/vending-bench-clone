@@ -73,7 +73,7 @@ export const getMachineInventory: ToolDefinition = {
   execute(_params, world) {
     const lines = [
       "Vending Machine Inventory (1421 Bay St):",
-      "Machine Layout: 6 rows × 4 columns (rows 1-3: small items, rows 4-6: large items)",
+      `Machine Layout: ${MACHINE_ROWS} rows × ${MACHINE_COLS} columns (rows 1-${MACHINE_ROWS / 2}: small items, rows ${MACHINE_ROWS / 2 + 1}-${MACHINE_ROWS}: large items)`,
       "",
     ];
 

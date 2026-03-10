@@ -1,10 +1,12 @@
 /**
- * Simulated search engine for the vending simulation.
+ * Search engine for the vending simulation.
  *
- * Returns supplier listings and business information based on the query.
- * Matches queries against the supplier catalog using keyword matching.
+ * Uses Brave Search API when BRAVE_API_KEY is set, with simulated supplier
+ * injection for supplier-related queries. Falls back to fully static results
+ * when no API key is available.
  */
 
+import { performBraveSearch } from "./brave-search.js";
 import { SUPPLIER_CATALOG, type SupplierDefinition } from "./suppliers.js";
 import { ALL_PRODUCTS, type ProductDefinition } from "./products.js";
 
@@ -15,10 +17,29 @@ export interface SearchResult {
 }
 
 /**
- * Perform a simulated web search.
- * Returns relevant supplier listings and business information.
+ * Perform a web search. Uses Brave API when available, static fallback otherwise.
+ * Async to support the Brave API call path.
+ */
+export async function performSearchAsync(query: string): Promise<string> {
+  const braveApiKey = process.env["BRAVE_API_KEY"];
+  if (braveApiKey) {
+    return performBraveSearch(query, braveApiKey);
+  }
+  return performSearchStatic(query);
+}
+
+/**
+ * Synchronous static search (legacy, used as fallback).
+ * Kept for backward compatibility with direct-mode tools.
  */
 export function performSearch(query: string): string {
+  return performSearchStatic(query);
+}
+
+/**
+ * Fully static/deterministic search based on keyword matching.
+ */
+function performSearchStatic(query: string): string {
   const q = query.toLowerCase();
   const results: SearchResult[] = [];
 

@@ -61,11 +61,11 @@ describe("Variety multiplier", () => {
 
   it("penalizes low variety", () => {
     expect(getVarietyMultiplier(1)).toBe(0.7);
-    expect(getVarietyMultiplier(2)).toBe(0.7);
+    expect(getVarietyMultiplier(2)).toBe(0.85);
   });
 
   it("rewards high variety", () => {
-    expect(getVarietyMultiplier(8)).toBe(1.1);
+    expect(getVarietyMultiplier(6)).toBe(1.1);
     expect(getVarietyMultiplier(12)).toBe(1.1);
   });
 });

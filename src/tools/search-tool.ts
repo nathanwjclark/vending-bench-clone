@@ -1,8 +1,8 @@
 /**
- * Search engine tool — returns supplier listings and business information.
+ * Search engine tool — uses Brave API when available, static fallback otherwise.
  */
 
-import { performSearch } from "../simulation/search.js";
+import { performSearchAsync } from "../simulation/search.js";
 import type { ToolDefinition } from "./types.js";
 
 export const searchEngine: ToolDefinition = {
@@ -16,13 +16,13 @@ export const searchEngine: ToolDefinition = {
     },
   },
   timeCost: "digital",
-  execute(params, _world) {
+  async execute(params, _world) {
     const query = String(params["query"] ?? "");
     if (!query) {
       return { output: "Error: 'query' is required." };
     }
 
-    const results = performSearch(query);
+    const results = await performSearchAsync(query);
     return { output: results };
   },
 };

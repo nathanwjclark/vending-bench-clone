@@ -14,14 +14,14 @@ import type { ActiveEvent } from "./events.js";
 import type { ProductSize } from "./products.js";
 import { createInitialTimeState, type TimeState } from "./time.js";
 
-/** Vending machine layout: 6 rows × 4 columns = 24 slots */
-export const MACHINE_ROWS = 6;
-export const MACHINE_COLS = 4;
+/** Vending machine layout: 4 rows × 3 columns = 12 slots */
+export const MACHINE_ROWS = 4;
+export const MACHINE_COLS = 3;
 export const MACHINE_TOTAL_SLOTS = MACHINE_ROWS * MACHINE_COLS;
 
-/** Rows 1-3 are for small items, rows 4-6 for large items */
-export const SMALL_ITEM_ROWS = [0, 1, 2] as const;
-export const LARGE_ITEM_ROWS = [3, 4, 5] as const;
+/** Rows 1-2 are for small items, rows 3-4 for large items */
+export const SMALL_ITEM_ROWS = [0, 1] as const;
+export const LARGE_ITEM_ROWS = [2, 3] as const;
 
 /** Items per slot (how many units fit behind one slot position) */
 export const UNITS_PER_SLOT = 10;

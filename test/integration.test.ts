@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { createVendingWorld, processEndOfDay, type VendingWorld } from "../src/simulation/world.js";
+import { createVendingWorld, processEndOfDay, MACHINE_ROWS, MACHINE_COLS, type VendingWorld } from "../src/simulation/world.js";
 import { processDailySales } from "../src/simulation/demand.js";
 import { calculateScore } from "../src/simulation/scoring.js";
 import {
@@ -360,20 +360,16 @@ describe("End-to-end demand simulation", () => {
   it("30-day simulation produces positive revenue with good stocking", () => {
     const world = createVendingWorld(30);
 
-    // Stock 10 small products (rows 0-2, 4 cols = 12 small slots, use 10)
+    // Stock 6 small products (rows 0-1, 3 cols = 6 small slots)
     const smallProducts = [
       { id: "water_bottle", price: 2.0 },
       { id: "soda_cola", price: 2.0 },
-      { id: "soda_lemon", price: 2.0 },
       { id: "energy_drink", price: 3.5 },
-      { id: "juice_orange", price: 2.75 },
       { id: "chips_classic", price: 2.0 },
-      { id: "chips_bbq", price: 2.0 },
       { id: "candy_bar", price: 2.25 },
-      { id: "gum_pack", price: 1.75 },
       { id: "granola_bar", price: 2.5 },
     ];
-    // Stock 6 large products (rows 3-5, 4 cols = 12 large slots, use 6)
+    // Stock 6 large products (rows 2-3, 3 cols = 6 large slots)
     const largeProducts = [
       { id: "sandwich_wrap", price: 5.5 },
       { id: "salad_bowl", price: 5.5 },
@@ -383,18 +379,18 @@ describe("End-to-end demand simulation", () => {
       { id: "fruit_cup", price: 4.0 },
     ];
 
-    // Fill small slots (rows 0-2, 4 cols each)
+    // Fill small slots (rows 0-1, 3 cols each)
     for (let i = 0; i < smallProducts.length; i++) {
-      const row = Math.floor(i / 4);
-      const col = i % 4;
+      const row = Math.floor(i / 3);
+      const col = i % 3;
       world.machineSlots[row]![col]!.productId = smallProducts[i]!.id;
       world.machineSlots[row]![col]!.quantity = 10;
       world.machineSlots[row]![col]!.price = smallProducts[i]!.price;
     }
 
     for (let i = 0; i < largeProducts.length; i++) {
-      const row = 3 + Math.floor(i / 4);
-      const col = i % 4;
+      const row = 2 + Math.floor(i / 3);
+      const col = i % 3;
       world.machineSlots[row]![col]!.productId = largeProducts[i]!.id;
       world.machineSlots[row]![col]!.quantity = 10;
       world.machineSlots[row]![col]!.price = largeProducts[i]!.price;
@@ -406,8 +402,8 @@ describe("End-to-end demand simulation", () => {
       world.time.day = day;
 
       // Restock every day (simulating perfect play)
-      for (let row = 0; row < 6; row++) {
-        for (let col = 0; col < 4; col++) {
+      for (let row = 0; row < MACHINE_ROWS; row++) {
+        for (let col = 0; col < MACHINE_COLS; col++) {
           const slot = world.machineSlots[row]![col]!;
           if (slot.productId) {
             slot.quantity = 10;

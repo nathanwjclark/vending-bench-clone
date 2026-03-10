@@ -44,7 +44,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   mode: "direct",
   model: "claude-sonnet-4-6",
   totalDays: 365,
-  maxContextTokens: 30_000,
+  maxContextTokens: 69_000,
   maxMessages: 200,
   checkpointInterval: 30,
   logDir: "logs",

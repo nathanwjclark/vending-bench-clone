@@ -45,6 +45,12 @@ function ok(text: string) {
   return { content: [{ type: "text" as const, text }], details: {} };
 }
 
+// -- Machine layout constants (must match world.ts) --
+const MACHINE_ROWS = 4;
+const MACHINE_COLS = 3;
+const SMALL_ROWS = [0, 1];
+const LARGE_ROWS = [2, 3];
+
 // -- Product helpers (inline to avoid importing from simulation) --
 
 interface ProductInfo {
@@ -203,9 +209,9 @@ export function createVendingTools() {
         const query = params.query;
         if (!query) return ok("Error: 'query' is required.");
 
-        // Import search function dynamically
-        const { performSearch } = await import("../simulation/search.js");
-        const results = performSearch(query);
+        // Use Brave-powered search when API key is available, static fallback otherwise
+        const { performSearchAsync } = await import("../simulation/search.js");
+        const results = await performSearchAsync(query);
         return ok(results);
       },
     },
@@ -270,8 +276,8 @@ export function createVendingTools() {
         let targetCol = -1;
 
         // Check for existing slot with this product
-        for (let row = 0; row < 6; row++) {
-          for (let col = 0; col < 4; col++) {
+        for (let row = 0; row < MACHINE_ROWS; row++) {
+          for (let col = 0; col < MACHINE_COLS; col++) {
             const slot = state.machineSlots[row]![col]!;
             if (slot.productId === productId) {
               targetRow = row;
@@ -284,9 +290,9 @@ export function createVendingTools() {
 
         // If no existing slot, find empty one with correct size
         if (targetRow < 0) {
-          const rows = product.size === "small" ? [0, 1, 2] : [3, 4, 5];
+          const rows = product.size === "small" ? SMALL_ROWS : LARGE_ROWS;
           for (const row of rows) {
-            for (let col = 0; col < 4; col++) {
+            for (let col = 0; col < MACHINE_COLS; col++) {
               const slot = state.machineSlots[row]![col]!;
               if (slot.productId === null) {
                 targetRow = row;
@@ -411,8 +417,8 @@ export function createVendingTools() {
 
         // Find slot with this product
         let found = false;
-        for (let row = 0; row < 6; row++) {
-          for (let col = 0; col < 4; col++) {
+        for (let row = 0; row < MACHINE_ROWS; row++) {
+          for (let col = 0; col < MACHINE_COLS; col++) {
             if (state.machineSlots[row]![col]!.productId === productId) {
               state.machineSlots[row]![col]!.price = price;
               found = true;
@@ -444,10 +450,10 @@ export function createVendingTools() {
         const lines = ["Vending Machine Inventory:"];
         let hasProducts = false;
 
-        for (let row = 0; row < 6; row++) {
-          const sizeLabel = row < 3 ? "small" : "large";
+        for (let row = 0; row < MACHINE_ROWS; row++) {
+          const sizeLabel = SMALL_ROWS.includes(row) ? "small" : "large";
           lines.push(`\n  Row ${row + 1} (${sizeLabel} items):`);
-          for (let col = 0; col < 4; col++) {
+          for (let col = 0; col < MACHINE_COLS; col++) {
             const slot = state.machineSlots[row]![col]!;
             if (slot.productId) {
               const p = getProduct(slot.productId);

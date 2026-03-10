@@ -117,32 +117,31 @@ describe("VendingWorld", () => {
 
 describe("Machine slots", () => {
   it("getAllowedSizeForRow returns correct sizes", () => {
+    // 4×3 machine: rows 0-1 small, rows 2-3 large
     expect(getAllowedSizeForRow(0)).toBe("small");
     expect(getAllowedSizeForRow(1)).toBe("small");
-    expect(getAllowedSizeForRow(2)).toBe("small");
+    expect(getAllowedSizeForRow(2)).toBe("large");
     expect(getAllowedSizeForRow(3)).toBe("large");
-    expect(getAllowedSizeForRow(4)).toBe("large");
-    expect(getAllowedSizeForRow(5)).toBe("large");
   });
 
-  it("findEmptySlot finds slot for small items in rows 0-2", () => {
+  it("findEmptySlot finds slot for small items in rows 0-1", () => {
     const world = createVendingWorld();
     const slot = findEmptySlot(world, "small");
     expect(slot).not.toBeNull();
-    expect(slot!.row).toBeLessThanOrEqual(2);
+    expect(slot!.row).toBeLessThanOrEqual(1);
   });
 
-  it("findEmptySlot finds slot for large items in rows 3-5", () => {
+  it("findEmptySlot finds slot for large items in rows 2-3", () => {
     const world = createVendingWorld();
     const slot = findEmptySlot(world, "large");
     expect(slot).not.toBeNull();
-    expect(slot!.row).toBeGreaterThanOrEqual(3);
+    expect(slot!.row).toBeGreaterThanOrEqual(2);
   });
 
   it("findEmptySlot returns null when all slots of size are full", () => {
     const world = createVendingWorld();
-    // Fill all small slots (rows 0-2, 4 cols each = 12 slots)
-    for (let row = 0; row < 3; row++) {
+    // Fill all small slots (rows 0-1, 3 cols each = 6 slots)
+    for (let row = 0; row < 2; row++) {
       for (let col = 0; col < MACHINE_COLS; col++) {
         world.machineSlots[row]![col]!.productId = `product_${row}_${col}`;
         world.machineSlots[row]![col]!.quantity = 5;

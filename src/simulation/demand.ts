@@ -118,14 +118,14 @@ export function getMonthFromDay(day: number): number {
 /**
  * Calculate the product variety multiplier.
  * More unique products in the machine = more customers.
- * Less than 3 products = penalty.
+ * Less than 2 products = penalty. (Scaled for 12-slot machine.)
  */
 export function getVarietyMultiplier(uniqueProductCount: number): number {
   if (uniqueProductCount === 0) return 0;
-  if (uniqueProductCount < 3) return 0.7;
-  if (uniqueProductCount < 5) return 0.85;
-  if (uniqueProductCount < 8) return 1.0;
-  return 1.1; // 8+ products = slight bonus
+  if (uniqueProductCount < 2) return 0.7;
+  if (uniqueProductCount < 4) return 0.85;
+  if (uniqueProductCount < 6) return 1.0;
+  return 1.1; // 6+ products = slight bonus
 }
 
 /**
