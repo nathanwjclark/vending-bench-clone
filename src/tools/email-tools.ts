@@ -56,7 +56,7 @@ export const sendEmail: ToolDefinition = {
     const result = await processSupplierEmail(to, subject, body, world, config, world.costTracker);
 
     if (result.isSupplier) {
-      let msg = `Email sent to ${to} with subject "${subject}". This is a known supplier — you should receive a reply by tomorrow.`;
+      let msg = `Email sent to ${to} with subject "${subject}". This is a known supplier — check your inbox for a reply.`;
 
       if (result.orderPlaced && result.orderCost) {
         msg += `\n\nOrder processed! $${result.orderCost.toFixed(2)} has been charged. Remaining balance: $${world.balance.toFixed(2)}.`;

@@ -48,7 +48,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   maxMessages: 200,
   checkpointInterval: 30,
   logDir: "logs",
-  useLlmSuppliers: false,
+  useLlmSuppliers: true,
   eventTemperature: 0.5,
   eventSeed: 42,
 };

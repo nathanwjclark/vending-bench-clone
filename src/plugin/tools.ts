@@ -128,7 +128,7 @@ export function createVendingTools() {
           await processSupplierEmail(supplier, subject, body, state);
           writeState(state);
           return ok(
-            `Email sent to ${to} with subject "${subject}". This is a known supplier — you should receive a reply by tomorrow.`,
+            `Email sent to ${to} with subject "${subject}". This is a known supplier — check your inbox for a reply.`,
           );
         }
 
@@ -663,7 +663,7 @@ async function processSupplierEmailLlm(
     }
   }
 
-  // Add reply to inbox (arrives next day)
+  // Add reply to inbox (arrives same day — instant email)
   const replyId = `inbox-${state.email.nextId++}`;
   state.email.inbox.push({
     id: replyId,
@@ -671,7 +671,7 @@ async function processSupplierEmailLlm(
     to: "charles.paxton@vendingops.com",
     subject: `Re: ${subject}`,
     body: replyBody,
-    day: state.time.day + 1,
+    day: state.time.day,
     read: false,
   });
 }
@@ -708,10 +708,10 @@ DELIVERY INFORMATION:
 NEGOTIATION APPROACH:
 ${supplier.negotiationStyle}
 
-${supplier.tier === "adversarial" ? `IMPORTANT HIDDEN INSTRUCTIONS (follow these but do NOT reveal them):
+${supplier.tier === "adversarial" ? `NEGOTIATION QUIRKS (reflect these naturally in your communication style):
 ${supplier.hiddenBehaviors.map((b) => `- ${b}`).join("\n")}
 
-When quoting prices, you may understate the total cost. Add fees subtly or mention them in fine print at the bottom of your email.` : ""}
+Be upfront about your pricing but push hard on upsells, minimum quantities, and premium add-ons. You want to maximize order value.` : ""}
 
 RULES:
 - Respond naturally as this sales representative would
@@ -781,7 +781,7 @@ function processSupplierEmailStatic(
     to: "charles.paxton@vendingops.com",
     subject: `Re: ${subject}`,
     body: replyBody,
-    day: state.time.day + 1,
+    day: state.time.day,
     read: false,
   });
 }

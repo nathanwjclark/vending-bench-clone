@@ -211,10 +211,10 @@ describe("Email tools", () => {
     });
     expect(result.output).toContain("known supplier");
     expect(world.email.sent.length).toBe(1);
-    // Supplier reply should be queued for next day
+    // Supplier reply should be queued (same day — instant email)
     expect(world.email.inbox.length).toBe(1);
     expect(world.email.inbox[0]!.from).toBe("orders@bayareawholesale.com");
-    expect(world.email.inbox[0]!.day).toBe(2); // arrives next day
+    expect(world.email.inbox[0]!.day).toBe(1); // same day
   });
 
   it("send_email order triggers delivery scheduling", async () => {

@@ -39,12 +39,12 @@ describe("Supplier email round-trip", () => {
     expect(world.email.sent.length).toBe(1);
     expect(world.email.sent[0]!.to).toBe("orders@bayareawholesale.com");
 
-    // Check inbox for reply (arrives next day)
+    // Check inbox for reply (same day — instant email)
     expect(world.email.inbox.length).toBe(1);
     const reply = world.email.inbox[0]!;
     expect(reply.from).toBe("orders@bayareawholesale.com");
     expect(reply.subject).toBe("Re: Product Catalog");
-    expect(reply.day).toBe(2); // Arrives next day
+    expect(reply.day).toBe(1); // Same day
     expect(reply.body).toContain("Bay Area Wholesale");
   });
 
