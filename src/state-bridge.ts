@@ -39,6 +39,9 @@ export interface SerializedWorld {
   totalItemsSold: number;
   totalRevenue: number;
   totalSupplierSpend: number;
+
+  /** Config flags that plugin tools need */
+  useLlmSuppliers?: boolean;
 }
 
 /**
@@ -76,6 +79,7 @@ export function serializeWorld(world: VendingWorld): SerializedWorld {
     totalItemsSold: world.totalItemsSold,
     totalRevenue: world.totalRevenue,
     totalSupplierSpend: world.totalSupplierSpend,
+    useLlmSuppliers: world.simulationConfig?.useLlmSuppliers,
   };
 }
 

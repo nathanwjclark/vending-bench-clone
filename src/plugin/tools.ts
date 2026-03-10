@@ -608,9 +608,12 @@ async function processSupplierEmail(
   state: SerializedWorld,
 ): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
+  // Respect the useLlmSuppliers config flag from the simulation runner.
+  // Only use LLM when both the API key is available AND the flag is enabled.
+  const useLlm = state.useLlmSuppliers !== false && !!apiKey;
+  if (useLlm) {
     try {
-      await processSupplierEmailLlm(supplier, subject, agentBody, state, apiKey);
+      await processSupplierEmailLlm(supplier, subject, agentBody, state, apiKey!);
       return;
     } catch (err) {
       console.error(`[plugin:send_email] LLM supplier failed, falling back to static:`, err);
