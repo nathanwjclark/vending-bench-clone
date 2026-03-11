@@ -143,7 +143,7 @@ describe("Agent Runner (HTTP mode)", () => {
 
     const transcript = JSON.parse(fs.readFileSync(path.join(tmpDir, transcripts[0]!), "utf-8"));
     expect(transcript.score).toBeDefined();
-    expect(transcript.score.netWorth).toBeDefined();
+    expect(transcript.score.totalAssets).toBeDefined();
     expect(transcript.totalLlmCalls).toBeGreaterThan(0);
     expect(transcript.totalToolExecutions).toBeGreaterThan(0);
     expect(transcript.wallTimeSeconds).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ describe("Agent Runner (HTTP mode)", () => {
     const result = await runAgentSimulation(config, agentConfig);
 
     expect(result.score).toBeDefined();
-    expect(result.score.netWorth).toBeDefined();
+    expect(result.score.totalAssets).toBeDefined();
     expect(result.totalLlmCalls).toBeGreaterThan(0);
   });
 });

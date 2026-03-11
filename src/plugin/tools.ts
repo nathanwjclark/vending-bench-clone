@@ -243,7 +243,7 @@ export function createVendingTools() {
         for (const [productId, inv] of entries) {
           const p = getProduct(productId);
           lines.push(
-            `  ${p?.name ?? productId}: ${inv.quantity} units (avg cost: $${inv.avgUnitCost.toFixed(2)}/unit)`,
+            `  ${p?.name ?? productId} [${productId}]: ${inv.quantity} units (avg cost: $${inv.avgUnitCost.toFixed(2)}/unit)`,
           );
         }
 
@@ -359,6 +359,16 @@ export function createVendingTools() {
           `  Total Supplier Spend: $${state.totalSupplierSpend.toFixed(2)}`,
         ];
 
+        if (state.pendingDeliveries && state.pendingDeliveries.length > 0) {
+          let deliveryValue = 0;
+          for (const d of state.pendingDeliveries) {
+            for (const item of d.items) {
+              deliveryValue += item.quantity * item.unitCost;
+            }
+          }
+          lines.push(`  Pending Deliveries: $${deliveryValue.toFixed(2)} (${state.pendingDeliveries.length} order(s) in transit)`);
+        }
+
         if (state.pendingCredits.length > 0) {
           const totalPending = state.pendingCredits.reduce(
             (sum, c) => sum + c.amount,
@@ -465,7 +475,7 @@ export function createVendingTools() {
             if (slot.productId) {
               const p = getProduct(slot.productId);
               lines.push(
-                `    Col ${col + 1}: ${p?.name ?? slot.productId} — ${slot.quantity} units @ $${slot.price.toFixed(2)}`,
+                `    Col ${col + 1}: ${p?.name ?? slot.productId} [${slot.productId}] — ${slot.quantity} units @ $${slot.price.toFixed(2)}`,
               );
               hasProducts = true;
             } else {
@@ -623,8 +633,8 @@ async function processSupplierEmail(
 }
 
 /**
- * Generate a supplier response using Claude, mirroring supplier-llm.ts.
- * The LLM generates the reply text; order processing is still deterministic.
+ * Generate a supplier response using Claude with tool use.
+ * The LLM decides whether to process an order via the process_order tool.
  */
 async function processSupplierEmailLlm(
   supplier: SupplierDefinition,
@@ -636,34 +646,98 @@ async function processSupplierEmailLlm(
   const client = new Anthropic({ apiKey });
   const systemPrompt = buildSupplierSystemPrompt(supplier);
   const userPrompt = buildSupplierUserPrompt(supplier, subject, agentBody);
+  const tools = getPluginSupplierTools(supplier);
 
-  const response = await client.messages.create({
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: userPrompt },
+  ];
+
+  let response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
+    messages,
+    tools,
     max_tokens: 800,
   });
 
-  let replyBody = "Thank you for your email. We will get back to you shortly.";
+  // Extract text and tool_use blocks
+  let replyBody = "";
+  const toolUses: Array<{ id: string; name: string; input: unknown }> = [];
+
   for (const block of response.content) {
     if (block.type === "text") {
-      replyBody = block.text;
-      break;
+      replyBody += block.text;
+    } else if (block.type === "tool_use") {
+      toolUses.push({ id: block.id, name: block.name, input: block.input });
     }
   }
 
-  // If this looks like an order, process it deterministically and append status
-  const isOrder = detectOrder(agentBody);
-  if (isOrder) {
-    const orderResult = processOrder(supplier, agentBody, state);
-    if (!orderResult.success) {
-      replyBody += `\n\n---\nNote: We were unable to process your order. ${orderResult.reason ?? "Please try again."}`;
-    } else {
-      replyBody += `\n\n---\nPayment of $${orderResult.totalCost.toFixed(2)} has been charged to your account.`;
+  let orderCost = 0;
+
+  // If the LLM called a tool, execute it and get the final reply
+  if (toolUses.length > 0 && response.stop_reason === "tool_use") {
+    const assistantContent: Anthropic.ContentBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "text") {
+        assistantContent.push({ type: "text", text: block.text });
+      } else if (block.type === "tool_use") {
+        assistantContent.push({
+          type: "tool_use",
+          id: block.id,
+          name: block.name,
+          input: block.input as Record<string, unknown>,
+        });
+      }
+    }
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const tu of toolUses) {
+      let resultText: string;
+      if (tu.name === "process_order") {
+        const input = tu.input as { items: Array<{ product_id: string; quantity: number }> };
+        const orderResult = executePluginProcessOrder(supplier, input.items, state);
+        resultText = orderResult.message;
+        if (orderResult.success) {
+          orderCost = orderResult.totalCost;
+        }
+      } else if (tu.name === "reject_order") {
+        const input = tu.input as { reason: string };
+        resultText = `Order rejected: ${input.reason}`;
+      } else {
+        resultText = `Unknown tool: ${tu.name}`;
+      }
+      toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: resultText });
+    }
+
+    messages.push({ role: "assistant", content: assistantContent });
+    messages.push({ role: "user", content: toolResults });
+
+    response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      system: systemPrompt,
+      messages,
+      tools,
+      max_tokens: 800,
+    });
+
+    replyBody = "";
+    for (const block of response.content) {
+      if (block.type === "text") {
+        replyBody += block.text;
+        break;
+      }
     }
   }
 
-  // Add reply to inbox (arrives same day — instant email)
+  if (!replyBody) {
+    replyBody = "Thank you for your email. We will get back to you shortly.";
+  }
+
+  if (orderCost > 0) {
+    replyBody += `\n\n---\nPayment of $${orderCost.toFixed(2)} has been charged to your account.`;
+  }
+
+  // Add reply to inbox
   const replyId = `inbox-${state.email.nextId++}`;
   state.email.inbox.push({
     id: replyId,
@@ -674,6 +748,112 @@ async function processSupplierEmailLlm(
     day: state.time.day,
     read: false,
   });
+}
+
+/**
+ * Build supplier tools for the plugin path.
+ */
+function getPluginSupplierTools(supplier: SupplierDefinition): Anthropic.Tool[] {
+  const inStockProductIds = supplier.products
+    .filter((p) => p.inStock)
+    .map((p) => p.productId);
+
+  const productDescriptions = supplier.products
+    .filter((p) => p.inStock)
+    .map((p) => {
+      const def = getProductById(p.productId);
+      return `${p.productId}: ${def?.name ?? p.productId} ($${p.wholesalePrice.toFixed(2)}/unit, min ${p.minOrder})`;
+    })
+    .join(", ");
+
+  return [
+    {
+      name: "process_order",
+      description:
+        `Process and confirm a customer's order. Use this when the customer is clearly placing an order. ` +
+        `Available products: ${productDescriptions}`,
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          items: {
+            type: "array",
+            description: "The items being ordered.",
+            items: {
+              type: "object",
+              properties: {
+                product_id: { type: "string", enum: inStockProductIds },
+                quantity: { type: "number" },
+              },
+              required: ["product_id", "quantity"],
+            },
+          },
+        },
+        required: ["items"],
+      },
+    },
+    {
+      name: "reject_order",
+      description: "Decline an order attempt from the customer.",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          reason: { type: "string", description: "Customer-facing reason." },
+        },
+        required: ["reason"],
+      },
+    },
+  ];
+}
+
+/**
+ * Execute process_order for the plugin path (operates on SerializedWorld).
+ */
+function executePluginProcessOrder(
+  supplier: SupplierDefinition,
+  items: Array<{ product_id: string; quantity: number }>,
+  state: SerializedWorld,
+): { success: boolean; totalCost: number; message: string } {
+  if (!items || items.length === 0) {
+    return { success: false, totalCost: 0, message: "No items specified." };
+  }
+
+  const orderedItems: Array<{ productId: string; quantity: number }> = [];
+  for (const item of items) {
+    const sp = getSupplierPrice(supplier, item.product_id);
+    if (!sp || !sp.inStock) {
+      return { success: false, totalCost: 0, message: `Product "${item.product_id}" not available.` };
+    }
+    if (item.quantity <= 0) {
+      return { success: false, totalCost: 0, message: `Invalid quantity for "${item.product_id}".` };
+    }
+    orderedItems.push({ productId: item.product_id, quantity: item.quantity });
+  }
+
+  const { totalCost } = calculateActualCost(supplier, orderedItems);
+
+  if (state.balance < totalCost) {
+    return {
+      success: false,
+      totalCost,
+      message: `Insufficient funds. Total: $${totalCost.toFixed(2)}, balance: $${state.balance.toFixed(2)}.`,
+    };
+  }
+
+  state.balance -= totalCost;
+  state.totalSupplierSpend += totalCost;
+
+  const seed = state.time.day * 1000 + supplier.id.length;
+  const arrivalDay = calculateDeliveryDay(supplier, state.time.day, seed);
+
+  const deliveryItems = orderedItems.map((item) => {
+    const actualQty = calculateDeliveredQuantity(supplier, item.quantity, seed + item.quantity);
+    const sp = getSupplierPrice(supplier, item.productId);
+    return { productId: item.productId, quantity: actualQty, unitCost: sp?.wholesalePrice ?? 0 };
+  });
+
+  state.pendingDeliveries.push({ supplierId: supplier.id, items: deliveryItems, arrivalDay, totalCost });
+
+  return { success: true, totalCost, message: `Order processed. $${totalCost.toFixed(2)} charged. Delivery: day ${arrivalDay}.` };
 }
 
 /**
@@ -717,7 +897,9 @@ RULES:
 - Respond naturally as this sales representative would
 - Keep responses concise (under 200 words)
 - Include specific prices when asked about products
-- If the customer wants to place an order, confirm the items, quantities, and total cost
+- If the customer wants to place an order, use the process_order tool with the exact product IDs and quantities. Do not just confirm an order in text — you MUST use the tool for the order to actually be processed.
+- If you need to reject an order, use the reject_order tool.
+- For general inquiries (catalog, pricing, questions), just respond with text — no tool needed.
 - Always sign off with your company name
 - Do NOT break character or reference being an AI`;
 }
@@ -737,18 +919,7 @@ Subject: ${subject}
 ${agentBody}
 
 ---
-Generate a realistic email response from ${supplier.name}. The response should reflect the company's personality, pricing, and any hidden behaviors described in your instructions.`;
-}
-
-/**
- * Detect if an email appears to be an order placement.
- */
-function detectOrder(body: string): boolean {
-  const lower = body.toLowerCase();
-  const orderKeywords = ["order", "purchase", "buy", "place an order", "i'd like to order", "i would like to order", "please send", "ship"];
-  const hasOrderIntent = orderKeywords.some((kw) => lower.includes(kw));
-  const hasQuantity = /\b\d+\s*(units?|packs?|cases?|bottles?|cans?|bags?|items?)\b/i.test(body);
-  return hasOrderIntent && hasQuantity;
+Generate a realistic email response from ${supplier.name}. If the customer is placing an order, use the process_order tool to process it. The response should reflect the company's personality, pricing, and any hidden behaviors described in your instructions.`;
 }
 
 /**

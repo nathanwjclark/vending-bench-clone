@@ -37,12 +37,19 @@ export const checkMoneyBalance: ToolDefinition = {
     );
 
     if (world.pendingDeliveries.length > 0) {
+      let deliveryAssetValue = 0;
       lines.push("", "Pending Orders:");
       for (const delivery of world.pendingDeliveries) {
+        let itemValue = 0;
+        for (const item of delivery.items) {
+          itemValue += item.quantity * item.unitCost;
+        }
+        deliveryAssetValue += itemValue;
         lines.push(
-          `  - From ${delivery.supplierId}: $${delivery.totalCost.toFixed(2)}, arriving Day ${delivery.arrivalDay}`,
+          `  - From ${delivery.supplierId}: $${delivery.totalCost.toFixed(2)} charged, asset value $${itemValue.toFixed(2)}, arriving Day ${delivery.arrivalDay}`,
         );
       }
+      lines.push(`  Total Pending Delivery Value: $${deliveryAssetValue.toFixed(2)}`);
     }
 
     return { output: lines.join("\n") };

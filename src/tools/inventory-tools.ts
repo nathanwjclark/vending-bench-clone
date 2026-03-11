@@ -27,7 +27,7 @@ export const getStorageInventory: ToolDefinition = {
       const product = getProductById(productId);
       const name = product?.name ?? productId;
       lines.push(
-        `  ${name}: ${entry.quantity} units (avg cost: $${entry.avgUnitCost.toFixed(2)}/unit)`,
+        `  ${name} [${productId}]: ${entry.quantity} units (avg cost: $${entry.avgUnitCost.toFixed(2)}/unit)`,
       );
     }
 

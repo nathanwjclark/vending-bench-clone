@@ -86,7 +86,7 @@ export const getMachineInventory: ToolDefinition = {
           const product = getProductById(slot.productId);
           const name = product?.name ?? slot.productId;
           lines.push(
-            `  [${row + 1}-${col + 1}] ${name}: ${slot.quantity} units @ $${slot.price.toFixed(2)}`,
+            `  [${row + 1}-${col + 1}] ${name} [${slot.productId}]: ${slot.quantity} units @ $${slot.price.toFixed(2)}`,
           );
         } else {
           lines.push(`  [${row + 1}-${col + 1}] (empty)`);

@@ -53,7 +53,7 @@ YOUR SITUATION:
 - If you can't pay the fee for 10 consecutive days, you go bankrupt
 
 YOUR GOAL:
-Maximize your net worth (bank balance + machine cash + inventory value) over the next year (365 days).
+Maximize your total assets (bank balance + machine cash + inventory value + pending deliveries + pending credits) over the next year (365 days).
 
 HOW THE BUSINESS WORKS:
 1. FIND SUPPLIERS: Use search_engine to find wholesale suppliers for snacks and drinks
@@ -152,7 +152,7 @@ export function buildMorningNotification(world: VendingWorld): string {
 
 export interface DailySnapshot {
   day: number;
-  netWorth: number;
+  totalAssets: number;
   bankBalance: number;
   machineCash: number;
   storageInventoryValue: number;
@@ -246,7 +246,7 @@ export async function runSimulation(
     const score = calculateScore(world);
     messages.push({
       role: "user",
-      content: `[System] Simulation resuming from Day ${startDay}. Current net worth: $${score.netWorth.toFixed(2)}. Balance: $${world.balance.toFixed(2)}. Items sold so far: ${world.totalItemsSold}.`,
+      content: `[System] Simulation resuming from Day ${startDay}. Current total assets: $${score.totalAssets.toFixed(2)}. Balance: $${world.balance.toFixed(2)}. Items sold so far: ${world.totalItemsSold}.`,
     });
   }
 
@@ -273,7 +273,7 @@ export async function runSimulation(
     const dayNum = world.time.day;
     const elapsedSec = (Date.now() - startTime) / 1000;
     const elapsed = elapsedSec.toFixed(0);
-    const netWorth = calculateScore(world).netWorth;
+    const totalAssets = calculateScore(world).totalAssets;
 
     // Time estimate
     let etaStr = "";
@@ -286,7 +286,7 @@ export async function runSimulation(
 
     const costSummary = costTracker.formatSummary();
     console.log(
-      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Net Worth: $${netWorth.toFixed(2)} | Sold: ${world.totalItemsSold} | ${elapsed}s elapsed${etaStr} | ${costSummary} ────`,
+      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Total Assets: $${totalAssets.toFixed(2)} | Sold: ${world.totalItemsSold} | ${elapsed}s elapsed${etaStr} | ${costSummary} ────`,
     );
 
     // 0. Process random events for the day
@@ -332,7 +332,7 @@ export async function runSimulation(
     }
     dailySnapshots.push({
       day: dayNum,
-      netWorth: dayScore.netWorth,
+      totalAssets: dayScore.totalAssets,
       bankBalance: dayScore.bankBalance,
       machineCash: dayScore.machineCash,
       storageInventoryValue: dayScore.storageInventoryValue,

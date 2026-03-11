@@ -10,6 +10,7 @@ import { createVendingWorld, processEndOfDay, type VendingWorld } from "../src/s
 import { DEFAULT_CONFIG } from "../src/config.js";
 import { getToolByName } from "../src/tools/index.js";
 import { SUPPLIER_CATALOG, calculateActualCost, calculateDeliveryDay, calculateDeliveredQuantity } from "../src/simulation/suppliers.js";
+import { processSupplierEmail } from "../src/llm/supplier-llm.js";
 
 async function execTool(
   toolName: string,
@@ -267,5 +268,77 @@ describe("Supplier email round-trip", () => {
     // With only 1-2 products stocked (low variety penalty), sales may be low
     // but should still generate something if there's inventory
     expect(salesRecord.totalRevenue).toBeGreaterThanOrEqual(0);
+  });
+
+  it("static path handles Nx quantity format (regression)", async () => {
+    const world = createVendingWorld();
+    world.simulationConfig = { ...DEFAULT_CONFIG, useLlmSuppliers: false };
+
+    const balanceBefore = world.balance;
+
+    // Use "30x" format that previously failed with detectOrder()
+    await execTool("send_email", world, {
+      to: "orders@bayareawholesale.com",
+      subject: "Order",
+      body: "I'd like to order: 20x water bottles and 10x cola. Ship to 1680 Mission St, SF.",
+    });
+
+    // Balance should be deducted — the static path should handle "Nx" format
+    expect(world.balance).toBeLessThan(balanceBefore);
+    expect(world.pendingDeliveries.length).toBe(1);
+  });
+
+  it("processSupplierEmail returns structured result for static orders", async () => {
+    const world = createVendingWorld();
+    const config = { ...DEFAULT_CONFIG, useLlmSuppliers: false };
+
+    const result = await processSupplierEmail(
+      "orders@bayareawholesale.com",
+      "Order",
+      "I would like to order 20 units of water bottles. Ship to 1680 Mission St.",
+      world,
+      config,
+    );
+
+    expect(result.isSupplier).toBe(true);
+    expect(result.orderPlaced).toBe(true);
+    expect(result.orderCost).toBeGreaterThan(0);
+    expect(world.pendingDeliveries.length).toBe(1);
+  });
+
+  it("processSupplierEmail returns rejection for unparseable static order", async () => {
+    const world = createVendingWorld();
+    const config = { ...DEFAULT_CONFIG, useLlmSuppliers: false };
+
+    const result = await processSupplierEmail(
+      "orders@bayareawholesale.com",
+      "Order",
+      "I would like to order some stuff please.",
+      world,
+      config,
+    );
+
+    expect(result.isSupplier).toBe(true);
+    // No items parseable, so order is rejected
+    expect(result.orderPlaced).not.toBe(true);
+  });
+
+  it("processSupplierEmail handles general inquiry without order", async () => {
+    const world = createVendingWorld();
+    const config = { ...DEFAULT_CONFIG, useLlmSuppliers: false };
+
+    const balanceBefore = world.balance;
+    const result = await processSupplierEmail(
+      "orders@bayareawholesale.com",
+      "Hello",
+      "Hi, I'm a new vending operator. Can you tell me about your company?",
+      world,
+      config,
+    );
+
+    expect(result.isSupplier).toBe(true);
+    expect(result.orderPlaced).toBeUndefined();
+    expect(world.balance).toBe(balanceBefore); // No charge
+    expect(world.email.inbox.length).toBe(1);
   });
 });

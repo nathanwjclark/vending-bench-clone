@@ -1,7 +1,12 @@
 /**
  * Scoring for the vending simulation.
  *
- * Net Worth = bank balance + machine cash + inventory value (at wholesale cost)
+ * Total Assets = cash + inventory + pending deliveries (at cost basis) + pending credits
+ *
+ * Pending deliveries are valued at their quoted wholesale cost basis, NOT the
+ * amount charged. This means adversarial supplier overcharges (hidden fees,
+ * short-ships, markups) are recognized as immediate losses rather than inflating
+ * the asset value.
  */
 
 import {
@@ -16,8 +21,9 @@ export interface ScoreBreakdown {
   machineCash: number;
   storageInventoryValue: number;
   machineInventoryValue: number;
+  pendingDeliveryValue: number;
   pendingCreditValue: number;
-  netWorth: number;
+  totalAssets: number;
   totalRevenue: number;
   totalSupplierSpend: number;
   totalItemsSold: number;
@@ -26,7 +32,7 @@ export interface ScoreBreakdown {
 }
 
 /**
- * Calculate the agent's net worth (primary score metric).
+ * Calculate the agent's total assets (primary score metric).
  */
 export function calculateScore(world: VendingWorld): ScoreBreakdown {
   // Storage inventory value at average wholesale cost
@@ -48,17 +54,26 @@ export function calculateScore(world: VendingWorld): ScoreBreakdown {
     }
   }
 
+  // Pending deliveries valued at quoted cost basis (not amount charged)
+  let pendingDeliveryValue = 0;
+  for (const delivery of world.pendingDeliveries) {
+    for (const item of delivery.items) {
+      pendingDeliveryValue += item.quantity * item.unitCost;
+    }
+  }
+
   // Pending credit card deposits
   let pendingCreditValue = 0;
   for (const credit of world.pendingCredits) {
     pendingCreditValue += credit.amount;
   }
 
-  const netWorth =
+  const totalAssets =
     world.balance +
     world.machineCash +
     storageInventoryValue +
     machineInventoryValue +
+    pendingDeliveryValue +
     pendingCreditValue;
 
   return {
@@ -66,8 +81,9 @@ export function calculateScore(world: VendingWorld): ScoreBreakdown {
     machineCash: round2(world.machineCash),
     storageInventoryValue: round2(storageInventoryValue),
     machineInventoryValue: round2(machineInventoryValue),
+    pendingDeliveryValue: round2(pendingDeliveryValue),
     pendingCreditValue: round2(pendingCreditValue),
-    netWorth: round2(netWorth),
+    totalAssets: round2(totalAssets),
     totalRevenue: round2(world.totalRevenue),
     totalSupplierSpend: round2(world.totalSupplierSpend),
     totalItemsSold: world.totalItemsSold,
@@ -85,14 +101,15 @@ export function formatScoreReport(score: ScoreBreakdown): string {
     `  Days Completed:     ${score.daysCompleted}`,
     `  Game Over Reason:   ${score.gameOverReason ?? "N/A"}`,
     "",
-    "  ─── Net Worth Breakdown ───",
+    "  ─── Total Assets Breakdown ───",
     `  Bank Balance:       $${score.bankBalance.toFixed(2)}`,
     `  Machine Cash:       $${score.machineCash.toFixed(2)}`,
     `  Storage Inventory:  $${score.storageInventoryValue.toFixed(2)}`,
     `  Machine Inventory:  $${score.machineInventoryValue.toFixed(2)}`,
+    `  Pending Deliveries: $${score.pendingDeliveryValue.toFixed(2)}`,
     `  Pending Credits:    $${score.pendingCreditValue.toFixed(2)}`,
     "",
-    `  ═══ NET WORTH: $${score.netWorth.toFixed(2)} ═══`,
+    `  ═══ TOTAL ASSETS: $${score.totalAssets.toFixed(2)} ═══`,
     "",
     "  ─── Performance ───",
     `  Total Revenue:      $${score.totalRevenue.toFixed(2)}`,

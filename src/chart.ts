@@ -14,7 +14,7 @@ import { execSync } from "node:child_process";
 
 interface DailySnapshot {
   day: number;
-  netWorth: number;
+  totalAssets: number;
   bankBalance: number;
   machineCash: number;
   storageInventoryValue: number;
@@ -98,8 +98,8 @@ function generateChart(transcriptPath: string): void {
 
 <div class="stats">
   <div class="stat">
-    <div class="stat-label">Final Net Worth</div>
-    <div class="stat-value green">$${(transcript.score.netWorth as number)?.toFixed(2)}</div>
+    <div class="stat-label">Final Total Assets</div>
+    <div class="stat-value green">$${(transcript.score.totalAssets as number)?.toFixed(2)}</div>
   </div>
   <div class="stat">
     <div class="stat-label">Total Revenue</div>
@@ -124,7 +124,7 @@ function generateChart(transcriptPath: string): void {
 </div>
 
 <div class="chart-container">
-  <div class="chart-title">Net Worth & Cumulative Financials (left) / Daily Revenue & Costs (right)</div>
+  <div class="chart-title">Total Assets & Cumulative Financials (left) / Daily Revenue & Costs (right)</div>
   <canvas id="mainChart"></canvas>
 </div>
 
@@ -145,7 +145,7 @@ const days = data.map(d => 'Day ' + d.day);
 
 // Color palette
 const colors = {
-  netWorth: '#3fb950',
+  totalAssets: '#3fb950',
   bankBalance: '#58a6ff',
   cumRevenue: '#d2a8ff',
   cumSpend: '#f85149',
@@ -159,13 +159,13 @@ const colors = {
   events: '#f85149',
 };
 
-// Chart 1: Net Worth + Cumulative (left) / Daily Rev+Cost (right)
+// Chart 1: Total Assets + Cumulative (left) / Daily Rev+Cost (right)
 new Chart(document.getElementById('mainChart'), {
   type: 'line',
   data: {
     labels: days,
     datasets: [
-      { label: 'Net Worth', data: data.map(d => d.netWorth), borderColor: colors.netWorth, borderWidth: 2, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+      { label: 'Total Assets', data: data.map(d => d.totalAssets), borderColor: colors.totalAssets, borderWidth: 2, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
       { label: 'Bank Balance', data: data.map(d => d.bankBalance), borderColor: colors.bankBalance, borderWidth: 1.5, pointRadius: 0, yAxisID: 'y', tension: 0.2, borderDash: [4,2] },
       { label: 'Cumulative Revenue', data: data.map(d => d.cumulativeRevenue), borderColor: colors.cumRevenue, borderWidth: 1.5, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
       { label: 'Cumulative Spend', data: data.map(d => d.cumulativeSupplierSpend), borderColor: colors.cumSpend, borderWidth: 1.5, pointRadius: 0, yAxisID: 'y', tension: 0.2 },

@@ -287,18 +287,18 @@ describe("Annual demand simulation", () => {
 
     const dailyFees = 365 * 2;
     const grossProfit = totalRevenue - totalCOGS - dailyFees;
-    const netWorth = grossProfit + 500; // starting balance
+    const totalAssets = grossProfit + 500; // starting balance
 
     console.log(`  Annual revenue (12 products, ref prices): $${totalRevenue.toFixed(2)}`);
     console.log(`  Total COGS: $${totalCOGS.toFixed(2)}`);
     console.log(`  Daily fees: $${dailyFees}`);
     console.log(`  Gross profit: $${grossProfit.toFixed(2)}`);
-    console.log(`  Net worth (incl $500 start): $${netWorth.toFixed(2)}`);
+    console.log(`  Total assets (incl $500 start): $${totalAssets.toFixed(2)}`);
     console.log(`  Daily avg revenue: $${(totalRevenue / 365).toFixed(2)}`);
 
-    // Target: net worth ~$50k-$75k with optimal play (Andon Labs says ~$63k)
-    expect(netWorth).toBeGreaterThan(40000);
-    expect(netWorth).toBeLessThan(90000);
+    // Target: total assets ~$50k-$75k with optimal play (Andon Labs says ~$63k)
+    expect(totalAssets).toBeGreaterThan(40000);
+    expect(totalAssets).toBeLessThan(90000);
   });
 
   it("generates modest revenue with poor stocking (3 products)", () => {

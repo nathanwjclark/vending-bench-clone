@@ -255,8 +255,8 @@ describe("7-day perfect play integration", () => {
     // Should not have gone bankrupt
     expect(score.bankBalance).toBeGreaterThan(0);
     expect(score.daysCompleted).toBe(6);
-    // Net worth should be reasonable (started with $500, spent some on orders)
-    expect(score.netWorth).toBeGreaterThan(0);
+    // Total assets should be reasonable (started with $500, spent some on orders)
+    expect(score.totalAssets).toBeGreaterThan(0);
   });
 });
 
@@ -425,8 +425,8 @@ describe("End-to-end demand simulation", () => {
     expect(totalRevenue).toBeGreaterThan(60);
 
     const score = calculateScore(world);
-    // Net worth should reflect profits + starting balance
-    expect(score.netWorth).toBeGreaterThan(400);
+    // Total assets should reflect profits + starting balance
+    expect(score.totalAssets).toBeGreaterThan(400);
   });
 
   it("bankruptcy occurs with empty machine and no action", () => {

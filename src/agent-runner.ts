@@ -29,11 +29,35 @@ export interface AgentRunnerConfig {
   agentId?: string;
 }
 
+interface LlmCallProfile {
+  callIndex: number;
+  callType: "initial" | "tool_followup";
+  totalMs: number;
+  ttfcMs?: number;
+  generationMs?: number;
+  usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  toolCallsRequested: number;
+}
+
+interface TurnProfile {
+  chatHandlerMs: number;
+  openclawMs?: number;
+  openclaw?: {
+    bootstrapMs?: number;
+    llmApiMs?: number;
+    toolExecMs?: number;
+    llmCallCount?: number;
+    toolExecCount?: number;
+    llmCallProfiles?: LlmCallProfile[];
+  };
+}
+
 interface AgentMessageResponse {
   text: string;
   toolCalls: number;
   tokenUsage?: { input: number; output: number; cacheRead?: number };
   stderr?: string;
+  profile?: TurnProfile;
 }
 
 /**
@@ -44,7 +68,7 @@ async function callAgent(agentUrl: string, message: string): Promise<AgentMessag
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),
-    signal: AbortSignal.timeout(180_000), // 3 minute timeout
+    signal: AbortSignal.timeout(330_000), // 5.5 minute timeout (agent-base uses 310s internally)
   });
 
   if (!res.ok) {
@@ -117,6 +141,14 @@ export async function runAgentSimulation(
   let totalEventsFired = 0;
   let daysCompleted = 0;
   const dailySnapshots: DailySnapshot[] = [];
+  const dailyProfiles: Array<{
+    day: number;
+    turns: TurnProfile[];
+    wallMs: number;
+    llmApiMs: number;
+    toolExecMs: number;
+    bootstrapMs: number;
+  }> = [];
   let prevSupplierSpend = 0;
   const startTime = Date.now();
 
@@ -125,16 +157,29 @@ export async function runAgentSimulation(
   writeStateFile(stateFilePath, world);
   console.log("Sending initial system context to agent (first LLM call, may take 30-60s)...");
   const initStart = Date.now();
-  await callAgent(agentConfig.agentUrl, systemContext);
-  console.log(`Initial context processed in ${((Date.now() - initStart) / 1000).toFixed(1)}s`);
+  const initResponse = await callAgent(agentConfig.agentUrl, systemContext);
+  const initMs = Date.now() - initStart;
+  console.log(`Initial context processed in ${(initMs / 1000).toFixed(1)}s`);
   totalLlmCalls++;
+
+  // Emit profile for the init call
+  if (initResponse.profile) {
+    const p = initResponse.profile;
+    console.log(
+      `[PROFILE] day=0 turn=0 wall=${initMs} handler=${p.chatHandlerMs} openclaw=${p.openclawMs ?? 0}` +
+      ` boot=${p.openclaw?.bootstrapMs ?? 0} llm=${p.openclaw?.llmApiMs ?? 0} tool=${p.openclaw?.toolExecMs ?? 0}`,
+    );
+    if (p.openclaw?.llmCallProfiles?.length) {
+      console.log(`[PROFILE_CALLS] day=0 ${JSON.stringify(p.openclaw.llmCallProfiles)}`);
+    }
+  }
 
   // Step 3: Day loop
   while (!world.isGameOver) {
     const dayNum = world.time.day;
-    const netWorth = calculateScore(world).netWorth;
+    const totalAssets = calculateScore(world).totalAssets;
     console.log(
-      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Net Worth: $${netWorth.toFixed(2)} | Sold: ${world.totalItemsSold} ────`,
+      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Total Assets: $${totalAssets.toFixed(2)} | Sold: ${world.totalItemsSold} ────`,
     );
 
     // 0. Process random events for the day
@@ -175,6 +220,27 @@ export async function runAgentSimulation(
 
     console.log(`  (${response.toolCalls} tool calls, ${dayElapsed}s)`);
 
+    // Emit profile line for eval-bridge to parse
+    const dayWallMs = Date.now() - dayStart;
+    if (response.profile) {
+      const p = response.profile;
+      console.log(
+        `[PROFILE] day=${dayNum} turn=1 wall=${dayWallMs} handler=${p.chatHandlerMs} openclaw=${p.openclawMs ?? 0}` +
+        ` boot=${p.openclaw?.bootstrapMs ?? 0} llm=${p.openclaw?.llmApiMs ?? 0} tool=${p.openclaw?.toolExecMs ?? 0}`,
+      );
+      if (p.openclaw?.llmCallProfiles?.length) {
+        console.log(`[PROFILE_CALLS] day=${dayNum} ${JSON.stringify(p.openclaw.llmCallProfiles)}`);
+      }
+      dailyProfiles.push({
+        day: dayNum,
+        turns: [p],
+        wallMs: dayWallMs,
+        llmApiMs: p.openclaw?.llmApiMs ?? 0,
+        toolExecMs: p.openclaw?.toolExecMs ?? 0,
+        bootstrapMs: p.openclaw?.bootstrapMs ?? 0,
+      });
+    }
+
     // 4. Read back updated state from file
     applyStateFromFile(world, stateFilePath);
 
@@ -195,7 +261,7 @@ export async function runAgentSimulation(
     }
     dailySnapshots.push({
       day: dayNum,
-      netWorth: dayScore.netWorth,
+      totalAssets: dayScore.totalAssets,
       bankBalance: dayScore.bankBalance,
       machineCash: dayScore.machineCash,
       storageInventoryValue: dayScore.storageInventoryValue,
@@ -260,6 +326,7 @@ export async function runAgentSimulation(
           history: world.eventHistory,
         },
         dailySnapshots,
+        dailyProfiles,
       },
       null,
       2,
@@ -342,7 +409,7 @@ CRITICAL: Call these tools using the tool calling mechanism. Do NOT write them a
 - **Name:** Charles Paxton
 - **Role:** Vending machine business operator
 - **Location:** San Francisco
-- **Goal:** Maximize net worth over the simulation period
+- **Goal:** Maximize total assets over the simulation period
 
 You manage a vending machine business. You find suppliers, order products,
 stock your machine, set competitive prices, and manage finances.
