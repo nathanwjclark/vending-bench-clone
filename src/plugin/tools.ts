@@ -23,6 +23,7 @@ import {
   type SupplierDefinition,
 } from "../simulation/suppliers.js";
 import { getProductById } from "../simulation/products.js";
+import { createProviderMessage, resolveProviderApiKey, type SupportedProvider } from "../llm/client.js";
 
 // -- State file helpers --
 
@@ -617,13 +618,20 @@ async function processSupplierEmail(
   agentBody: string,
   state: SerializedWorld,
 ): Promise<void> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const provider =
+    (process.env["VENDING_BENCH_SUPPLIER_PROVIDER"] as SupportedProvider | undefined) ?? "anthropic";
+  const apiKey = resolveProviderApiKey(provider);
   // Respect the useLlmSuppliers config flag from the simulation runner.
   // Only use LLM when both the API key is available AND the flag is enabled.
   const useLlm = state.useLlmSuppliers !== false && !!apiKey;
   if (useLlm) {
     try {
-      await processSupplierEmailLlm(supplier, subject, agentBody, state, apiKey!);
+      await processSupplierEmailLlm(supplier, subject, agentBody, state, {
+        provider,
+        apiKey: apiKey!,
+        model: process.env["VENDING_BENCH_SUPPLIER_MODEL"] ??
+          (provider === "cerebras" ? "zai-glm-4.7" : "claude-haiku-4-5-20251001"),
+      });
       return;
     } catch (err) {
       console.error(`[plugin:send_email] LLM supplier failed, falling back to static:`, err);
@@ -641,9 +649,8 @@ async function processSupplierEmailLlm(
   subject: string,
   agentBody: string,
   state: SerializedWorld,
-  apiKey: string,
+  providerConfig: { provider: SupportedProvider; apiKey: string; model: string },
 ): Promise<void> {
-  const client = new Anthropic({ apiKey });
   const systemPrompt = buildSupplierSystemPrompt(supplier);
   const userPrompt = buildSupplierUserPrompt(supplier, subject, agentBody);
   const tools = getPluginSupplierTools(supplier);
@@ -652,12 +659,13 @@ async function processSupplierEmailLlm(
     { role: "user", content: userPrompt },
   ];
 
-  let response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+  let response = await createProviderMessage({
+    providerConfig,
     system: systemPrompt,
     messages,
     tools,
-    max_tokens: 800,
+    maxTokens: 800,
+    temperature: 0.45,
   });
 
   // Extract text and tool_use blocks
@@ -675,7 +683,7 @@ async function processSupplierEmailLlm(
   let orderCost = 0;
 
   // If the LLM called a tool, execute it and get the final reply
-  if (toolUses.length > 0 && response.stop_reason === "tool_use") {
+  if (toolUses.length > 0 && response.stopReason === "tool_use") {
     const assistantContent: Anthropic.ContentBlockParam[] = [];
     for (const block of response.content) {
       if (block.type === "text") {
@@ -712,12 +720,13 @@ async function processSupplierEmailLlm(
     messages.push({ role: "assistant", content: assistantContent });
     messages.push({ role: "user", content: toolResults });
 
-    response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    response = await createProviderMessage({
+      providerConfig,
       system: systemPrompt,
       messages,
       tools,
-      max_tokens: 800,
+      maxTokens: 800,
+      temperature: 0.45,
     });
 
     replyBody = "";

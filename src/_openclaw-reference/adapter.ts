@@ -91,9 +91,9 @@ export async function runOpenClawSimulation(
 
   while (!world.isGameOver) {
     const dayNum = world.time.day;
-    const netWorth = calculateScore(world).netWorth;
+    const totalAssets = calculateScore(world).totalAssets;
     console.log(
-      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Net Worth: $${netWorth.toFixed(2)} | Sold: ${world.totalItemsSold} ────`,
+      `\n──── Day ${dayNum}/${config.totalDays} | Balance: $${world.balance.toFixed(2)} | Total Assets: $${totalAssets.toFixed(2)} | Sold: ${world.totalItemsSold} ────`,
     );
 
     // 0. Process random events for the day
@@ -155,7 +155,7 @@ export async function runOpenClawSimulation(
     }
     dailySnapshots.push({
       day: dayNum,
-      netWorth: dayScore.netWorth,
+      totalAssets: dayScore.totalAssets,
       bankBalance: dayScore.bankBalance,
       machineCash: dayScore.machineCash,
       storageInventoryValue: dayScore.storageInventoryValue,

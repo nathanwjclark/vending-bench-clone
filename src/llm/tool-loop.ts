@@ -7,17 +7,18 @@
  * or calls wait_for_next_day.
  */
 
-import type Anthropic from "@anthropic-ai/sdk";
 import type { SimulationConfig } from "../config.js";
 import type { CostTracker } from "../cost-tracker.js";
 import { advanceTime, isDayOver, formatDayTime } from "../simulation/time.js";
 import type { VendingWorld } from "../simulation/world.js";
 import { getToolByName, getOpenAiToolDefs } from "../tools/index.js";
 import {
-  getAnthropicClient,
+  createProviderMessage,
+  resolvePrimaryProviderConfig,
   toAnthropicTools,
   toAnthropicMessages,
   type ChatMessage,
+  type ProviderResponse,
 } from "./client.js";
 import { trimMessages } from "./context.js";
 
@@ -41,7 +42,7 @@ export async function runToolLoop(
   config: SimulationConfig,
   costTracker?: CostTracker,
 ): Promise<ToolLoopResult> {
-  const client = getAnthropicClient(config);
+  const providerConfig = resolvePrimaryProviderConfig(config);
   const oaiToolDefs = getOpenAiToolDefs();
   const anthropicTools = toAnthropicTools(oaiToolDefs);
   let llmCalls = 0;
@@ -65,23 +66,24 @@ export async function runToolLoop(
       toAnthropicMessages(trimmedMessages);
 
     // Call LLM
-    let response: Anthropic.Message;
+    let response: ProviderResponse;
     try {
-      response = await client.messages.create({
-        model: config.model,
+      response = await createProviderMessage({
+        providerConfig,
         system,
         messages: anthropicMessages,
         tools: anthropicTools,
-        max_tokens: 4096,
+        maxTokens: 4096,
+        temperature: 0.45,
       });
       llmCalls++;
 
       // Record token usage
       if (costTracker && response.usage) {
         costTracker.recordUsage({
-          model: config.model,
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
+          model: providerConfig.model,
+          inputTokens: response.usage.inputTokens,
+          outputTokens: response.usage.outputTokens,
           category: "agent",
         });
       }
@@ -197,7 +199,7 @@ export async function runToolLoop(
     if (dayEnded) break;
 
     // If the LLM signaled end_turn, stop
-    if (response.stop_reason === "end_turn" && toolUses.length === 0) {
+    if (response.stopReason === "end_turn" && toolUses.length === 0) {
       break;
     }
   }

@@ -8,7 +8,7 @@ A benchmark eval that simulates running a vending machine business over 365 days
 
 | Mode | Description |
 |------|-------------|
-| `direct` | LLM called in-process via Anthropic SDK (standalone, no external dependencies) |
+| `direct` | LLM called in-process via Anthropic or Cerebras |
 | `agent` | Communicates with a [clawfarm](https://github.com/nathanwjclark/clawfarm) agent-base via HTTP |
 | `openclaw` | Legacy mode (deprecated) — invokes openclaw CLI directly |
 
@@ -60,13 +60,27 @@ npx tsx src/index.ts run [options]
 
 --mode <direct|agent|openclaw>  Execution mode (default: direct)
 --days <number>                 Simulation days (default: 365)
+--provider <anthropic|cerebras> Primary LLM provider (default: anthropic)
 --model <string>                LLM model (default: claude-sonnet-4-6)
+--supplier-provider <anthropic|cerebras>  Supplier LLM provider
+--supplier-model <string>       Supplier LLM model
+--search-provider <anthropic|cerebras>    Search classifier provider
+--search-model <string>         Search classifier model
 --agent-url <url>               Agent-base URL (required for agent mode)
 --event-temp <0-1>              Random event frequency (default: 0.5)
 --no-events                     Disable random events
 --checkpoint <number>           Save checkpoint every N days (default: 30)
 --log-dir <path>                Log directory (default: logs)
 ```
+
+Environment overrides used by `clawfarm` agent-mode evals:
+
+- `VENDING_BENCH_PROVIDER`
+- `VENDING_BENCH_MODEL`
+- `VENDING_BENCH_SUPPLIER_PROVIDER`
+- `VENDING_BENCH_SUPPLIER_MODEL`
+- `VENDING_BENCH_SEARCH_PROVIDER`
+- `VENDING_BENCH_SEARCH_MODEL`
 
 ## Testing
 

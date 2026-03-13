@@ -80,8 +80,34 @@ function parseArgs(args: string[]): {
         options.simConfig.totalDays = parseInt(next ?? "365", 10);
         i++;
         break;
+      case "--provider":
+        if (next === "anthropic" || next === "cerebras") {
+          options.simConfig.provider = next;
+        }
+        i++;
+        break;
       case "--model":
         options.simConfig.model = next;
+        i++;
+        break;
+      case "--supplier-provider":
+        if (next === "anthropic" || next === "cerebras") {
+          options.simConfig.supplierProvider = next;
+        }
+        i++;
+        break;
+      case "--supplier-model":
+        options.simConfig.supplierModel = next;
+        i++;
+        break;
+      case "--search-provider":
+        if (next === "anthropic" || next === "cerebras") {
+          options.simConfig.searchProvider = next;
+        }
+        i++;
+        break;
+      case "--search-model":
+        options.simConfig.searchModel = next;
         i++;
         break;
       case "--checkpoint":
@@ -155,7 +181,12 @@ function printUsage(): void {
   console.log("Run Options:");
   console.log("  --mode <direct|agent|openclaw>  Execution mode (default: direct)");
   console.log("  --days <number>            Simulation days (default: 365)");
+  console.log("  --provider <anthropic|cerebras>  LLM provider (default: anthropic)");
   console.log("  --model <string>           LLM model (default: claude-sonnet-4-6)");
+  console.log("  --supplier-provider <anthropic|cerebras>  Supplier LLM provider");
+  console.log("  --supplier-model <string>  Supplier LLM model");
+  console.log("  --search-provider <anthropic|cerebras>    Search-classifier provider");
+  console.log("  --search-model <string>    Search-classifier model");
   console.log("  --checkpoint <number>      Checkpoint every N days (default: 30)");
   console.log("  --log-dir <path>           Log directory (default: logs)");
   console.log("  --llm-suppliers            Use LLM for supplier email responses");
@@ -214,7 +245,7 @@ async function main() {
 
         if (!config.apiKey) {
           console.error("Error: No API key found.");
-          console.error("Set ANTHROPIC_API_KEY or CLAUDE_API_KEY in your environment,");
+          console.error(`Set the API key for provider "${config.provider}" in your environment,`);
           console.error("or create a .env file.");
           process.exit(1);
         }
@@ -228,7 +259,7 @@ async function main() {
         // Direct mode: LLM in-process
         if (!config.apiKey) {
           console.error("Error: No API key found.");
-          console.error("Set ANTHROPIC_API_KEY or CLAUDE_API_KEY in your environment,");
+          console.error(`Set the API key for provider "${config.provider}" in your environment,`);
           console.error("or create a .env file.");
           process.exit(1);
         }

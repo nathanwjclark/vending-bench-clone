@@ -24,6 +24,10 @@ import {
 import { getProductById } from "../simulation/products.js";
 import { addToInbox } from "../simulation/email.js";
 import { AGENT_EMAIL, type PendingDelivery, type VendingWorld } from "../simulation/world.js";
+import {
+  createProviderMessage,
+  resolveSupplierProviderConfig,
+} from "./client.js";
 
 /**
  * Process a sent email and generate a supplier response.
@@ -291,11 +295,10 @@ async function generateLlmResponse(
   config: SimulationConfig,
   costTracker?: CostTracker,
 ): Promise<SupplierActionOutcome> {
-  const client = new Anthropic({ apiKey: config.apiKey });
+  const providerConfig = resolveSupplierProviderConfig(config);
   const systemPrompt = buildSupplierSystemPrompt(supplier);
   const userPrompt = buildSupplierUserPrompt(supplier, subject, agentBody, world);
   const tools = getSupplierTools(supplier);
-  const supplierModel = config.supplierModel ?? config.model;
 
   const outcome: SupplierActionOutcome = { orderPlaced: false, orderCost: 0 };
 
@@ -305,19 +308,20 @@ async function generateLlmResponse(
       { role: "user", content: userPrompt },
     ];
 
-    let response = await client.messages.create({
-      model: supplierModel,
+    let response = await createProviderMessage({
+      providerConfig,
       system: systemPrompt,
       messages,
       tools,
-      max_tokens: 800,
+      maxTokens: 800,
+      temperature: 0.45,
     });
 
     if (costTracker && response.usage) {
       costTracker.recordUsage({
-        model: supplierModel,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
+        model: providerConfig.model,
+        inputTokens: response.usage.inputTokens,
+        outputTokens: response.usage.outputTokens,
         category: "supplier",
       });
     }
@@ -335,7 +339,7 @@ async function generateLlmResponse(
     }
 
     // If the LLM called a tool, execute it and get the final reply
-    if (toolUses.length > 0 && response.stop_reason === "tool_use") {
+    if (toolUses.length > 0 && response.stopReason === "tool_use") {
       // Build the assistant message with all content blocks
       const assistantContent: Anthropic.ContentBlockParam[] = [];
       for (const block of response.content) {
@@ -388,19 +392,20 @@ async function generateLlmResponse(
       messages.push({ role: "assistant", content: assistantContent });
       messages.push({ role: "user", content: toolResults });
 
-      response = await client.messages.create({
-        model: supplierModel,
+      response = await createProviderMessage({
+        providerConfig,
         system: systemPrompt,
         messages,
         tools,
-        max_tokens: 800,
+        maxTokens: 800,
+        temperature: 0.45,
       });
 
       if (costTracker && response.usage) {
         costTracker.recordUsage({
-          model: supplierModel,
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
+          model: providerConfig.model,
+          inputTokens: response.usage.inputTokens,
+          outputTokens: response.usage.outputTokens,
           category: "supplier",
         });
       }

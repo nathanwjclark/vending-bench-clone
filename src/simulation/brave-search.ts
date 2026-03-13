@@ -10,12 +10,12 @@
  * simulation-aware intercepted results.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { SUPPLIER_CATALOG, type SupplierDefinition } from "./suppliers.js";
 import { ALL_PRODUCTS, type ProductDefinition } from "./products.js";
 import { EVENT_CATALOG } from "./events.js";
 import type { ActiveEvent } from "./events.js";
 import { generateWeather, type Weather } from "./demand.js";
+import { createProviderMessage, resolveSearchProviderConfig } from "../llm/client.js";
 
 export interface SearchResult {
   title: string;
@@ -38,13 +38,13 @@ type SearchIntent = "supplier" | "market" | "general";
  */
 async function classifySearchIntent(
   query: string,
-  apiKey: string,
 ): Promise<SearchIntent> {
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 20,
+    const providerConfig = resolveSearchProviderConfig();
+    const response = await createProviderMessage({
+      providerConfig,
+      maxTokens: 20,
+      temperature: 0,
       system: `You classify search queries into exactly one category. Respond with ONLY one word.
 
 Categories:
@@ -92,12 +92,8 @@ export async function performBraveSearch(
   braveApiKey: string,
   context?: SearchContext,
 ): Promise<string> {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-
   // Classify intent
-  const intent = anthropicKey
-    ? await classifySearchIntent(query, anthropicKey)
-    : classifyByKeywords(query);
+  const intent = await classifySearchIntent(query);
 
   const results: SearchResult[] = [];
 
